@@ -1,5 +1,5 @@
 import math
-from random import randint
+from random import randint, choice
 
 import numpy as np
 
@@ -38,6 +38,7 @@ class BasicConfig(object):
 
         self.n_player = 3
         self.apply_dog = False
+        self.boosting = False
 
     @property
     def animal_price(self):
@@ -93,6 +94,25 @@ class ExchangeTableConfig2(BasicConfig):
                             (COW, 2, HORSE),
                             (SHEEP, 2, SMALL_DOG),
                             (COW, 1, BIG_DOG))
+
+class BoostingConfig(BasicConfig):
+    def __init__(self):
+        super(BoostingConfig, self).__init__()
+        self.name = 'Boosting'
+        self.boosting = True
+
+class BoostingExchangeTableConfig(BasicConfig):
+    def __init__(self):
+        super(BoostingExchangeTableConfig, self).__init__()
+        self.name = 'Boosting'
+        self.boosting = True
+
+        self.EXCHANGE_TABLE = ((RABBIT, 3, SHEEP),
+                    (SHEEP, 2, PIG),
+                    (PIG, 3, COW),
+                    (COW, 2, HORSE),
+                    (SHEEP, 2, SMALL_DOG),
+                    (COW, 1, BIG_DOG))
 
 
 class Player(object):
@@ -185,6 +205,32 @@ class Player(object):
                                                                 self.animals[BIG_DOG, t],
                                                                 self.current_score)
 
+class Observer(object):
+    DIFFERENCE_LEVEL1 = 30
+    DIFFERENCE_LEVEL2 = 60
+
+    @classmethod
+    def boosting(cls, player_scores, turn):
+        my_score = player_scores[turn]
+        max_score = max(player_scores)
+        min_score = min(player_scores)
+        diff_score = max_score - my_score
+
+        if diff_score == 0:
+            diff_min = my_score - min_score
+            if diff_min < cls.DIFFERENCE_LEVEL1:
+                return None, None
+            elif cls.DIFFERENCE_LEVEL2 > diff_min > cls.DIFFERENCE_LEVEL1:
+                return choice([(RABBIT, SHEEP), (RABBIT, RABBIT), (FOX, SHEEP)])
+            else:
+                return choice([(FOX, SHEEP), (RABBIT, RABBIT), (FOX, SHEEP)])
+        if diff_score > cls.DIFFERENCE_LEVEL1:
+            return choice([(PIG, SHEEP), (PIG, RABBIT), (SHEEP, RABBIT), (PIG, SHEEP), (RABBIT, SHEEP), (PIG, SHEEP), (COW, PIG)])
+
+        if diff_score > cls.DIFFERENCE_LEVEL2:
+            return choice([(COW, PIG), (PIG, SHEEP), (PIG, COW), (SHEEP, SHEEP), (PIG, PIG)])
+
+        return None, None
 
 class Game(object):
     def __init__(self, config):
@@ -204,13 +250,19 @@ class Game(object):
                 return occurrence[2]
         return None
 
-    def roll_dice(self):
+    def roll_dice(self, turn):
+        if self.config.boosting:
+            scores = self.get_player_score()
+            animal1, animal2 = Observer.boosting(scores, turn)
+            if animal1 != None and animal2 != None:
+                return animal1, animal2
+
         animal1 = self.generate_animal(self.config.DICE1_OCCURRENCES)
         animal2 = self.generate_animal(self.config.DICE2_OCCURRENCES)
         return animal1, animal2
 
     def step(self, turn, t):
-        animal1, animal2 = self.roll_dice()
+        animal1, animal2 = self.roll_dice(turn)
         self.players[turn].get_animal(animal1, animal2, t)
 
     def play(self):
